@@ -1,0 +1,22 @@
+# looot-battlecards
+
+> Open-source competitive battlecards. Give it your product and 1 to 10 competitor domains. It reads each competitor's pricing page, homepage, careers page, news, tech stack, review snippets and ads through looot, and writes one battlecard per competitor as JSON, markdown and PDF-ready HTML. Every claim has a source link and the fetch date.
+
+## Run it
+- Free check, no token: `npm run cards -- --demo`
+- Price a real run, no call made: `npm run cards -- --product "Acme" --competitors a.com,b.com --dry-run`
+- Real run: `LOOOT_TOKEN=... npm run cards -- --config battlecards.yaml --max-spend 0.25`
+- Output: `cards/<domain>.json|md|html` and `cards/index.md`
+
+## Rules
+- Always run `--dry-run` first and show the list-price cost to the user.
+- A run never passes `--max-spend`. A call that would pass it is skipped, not sent.
+- A section marked pending is still running at looot. It is not failed and was charged at most its list price.
+- Assembly uses no LLM. `--summary` adds one only when ANTHROPIC_API_KEY is set.
+- For ongoing page-change alerts use https://github.com/loootai/looot-monitor, not this repo.
+
+## Files
+- src/engine/engine.ts: plan, quote, build
+- src/engine/extract.ts: one extractor per signal
+- src/engine/signals.ts: endpoint ids and list prices
+- skills/battlecards/SKILL.md: Claude Code skill

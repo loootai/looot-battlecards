@@ -1,0 +1,18 @@
+# Copy to battlecards.yaml and run: npm run cards -- --config battlecards.yaml --dry-run
+product:
+  name: Tallyroom
+  domain: tallyroom.example
+  # Your own words. They appear on every card as "Where we win" and are never fetched.
+  strengths:
+    - Deposit invoices show the client the full project total.
+    - One flat price for the whole studio.
+competitors:
+  - ledgerly.example
+  - domain: paperkite.example
+    name: Paperkite
+    pricingUrl: https://paperkite.example/plans   # optional, when pricing is not at /pricing
+    careersUrl: https://paperkite.example/jobs    # optional, when careers is not at /careers
+# Optional. Default is all seven: pricing, positioning, news, hiring, tech, reviews, ads
+signals: [pricing, positioning, news, hiring, tech, reviews, ads]
+# Hard cap for the run. Calls that would pass it are skipped and marked on the card.
+maxSpendUsd: 0.25
