@@ -1,4 +1,8 @@
+<p align="center"><img src="assets/hero.png" alt="looot-battlecards" width="100%"></p>
+
 # looot-battlecards
+
+[![License](https://img.shields.io/github/license/loootai/looot-battlecards)](LICENSE) [![Release](https://img.shields.io/github/v/release/loootai/looot-battlecards)](https://github.com/loootai/looot-battlecards/releases) [![Docs](https://img.shields.io/badge/docs-docs.looot.ai-12A06A)](https://docs.looot.ai)
 
 Competitive battlecards from public data, with a source link and a fetch date next to every claim. Give it your product and 1 to 10 competitor domains. It reads each competitor's pricing page, homepage, careers page, news, tech stack, review snippets and ads through [looot](https://looot.ai) and writes one card per competitor as JSON, markdown and PDF-ready HTML.
 
@@ -86,3 +90,20 @@ git config core.hooksPath .githooks
 ## Licence
 
 MIT, copyright looot.
+
+## Related
+
+Other open-source projects built on [looot](https://looot.ai):
+
+- [looot-intent](https://github.com/loootai/looot-intent): account intent and buying-stage scoring (6sense)
+- [looot-score](https://github.com/loootai/looot-score): lead and ICP fit scoring (MadKudu)
+- [looot-reveal](https://github.com/loootai/looot-reveal): which companies visit your site (RB2B, Clearbit Reveal)
+- [looot-techstack](https://github.com/loootai/looot-techstack): website technologies from several providers (BuiltWith, Wappalyzer)
+- [looot-signals](https://github.com/loootai/looot-signals): hiring, funding and news triggers (TheirStack, Harmonic)
+- [looot-lookalike](https://github.com/loootai/looot-lookalike): lookalike company search (Ocean.io)
+- [looot-ads](https://github.com/loootai/looot-ads): competitor ad board (Foreplay)
+- [looot-reviews](https://github.com/loootai/looot-reviews): review themes and weak spots (ReviewTrackers)
+- [looot-mentions](https://github.com/loootai/looot-mentions): brand and keyword listening (Brand24)
+- [looot-crm](https://github.com/loootai/looot-crm): a small CRM with buying signals built in
+- [looot-seo](https://github.com/loootai/looot-seo): self-hosted SEO workspace
+- [looot-monitor](https://github.com/loootai/looot-monitor): brand and competitor monitoring with alerts
