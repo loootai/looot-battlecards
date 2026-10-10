@@ -15,7 +15,7 @@ Runs the `looot-battlecards` CLI from the repository root. Each card has pricing
    Show the list-price total to the user and wait for a yes. A typical competitor costs about $0.015.
 3. Run it with a cap equal to the quote rounded up:
    `LOOOT_TOKEN=$LOOOT_TOKEN npm run cards -- --product "<name>" --competitors a.com,b.com --max-spend 0.10`
-   If LOOOT_TOKEN is missing, tell the user to create an agent token at https://looot.ai/settings. Never ask for it in chat.
+   If LOOOT_TOKEN is missing, tell the user to run `looot login` or create an agent token in the looot web app under Settings, "Agent tokens" (README, "What you need"). Never ask for it in chat. The CLI reads the shell environment, not `.env.local`.
 4. Read `cards/index.md`, then each `cards/<domain>.md`. Report sections marked "Nothing found", "Pending" or "Failed" as they are. Never fill a gap from memory.
 5. For PDF, open `cards/<domain>.html` and use Print, Save as PDF.
 

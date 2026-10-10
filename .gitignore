@@ -12,3 +12,4 @@ coverage/
 .tmp-test-*/
 cards/
 .demo.log
+battlecards.yaml

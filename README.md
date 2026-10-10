@@ -22,7 +22,82 @@ An open-source alternative to Klue and Crayon. Neither publishes a starting pric
 - Exports each card to markdown and to a single HTML page with print styles, ready for "Save as PDF".
 - Shows your own strengths on each card under "Where we win", marked as your words, never as fetched data.
 
-## Signals
+## What you need
+
+- Node 22.12 or newer. `package.json` has no `engines` field. Next.js 16 needs 20.9 or newer and the test runner (vitest 5) needs 22.12 or newer. I ran everything below on Node 24.
+- npm. Nothing else for the demo and for `--dry-run`.
+- A looot account and an agent token, only for a real run. Sign up at https://looot.ai/auth/sign-up. To get a token, run `npm i -g looot` and then `looot login`, which opens a browser approval. Or open the looot web app, go to Settings, "Agent tokens" and create one (https://docs.looot.ai/get-started/sign-in). With no browser, create the token there and `export LOOOT_TOKEN=...`.
+- The token needs the scopes `runs.execute`, `catalog.read`, `runs.read` and `usage.read`.
+- A funded balance. A run needs prepaid credit, the minimum top-up is $5, and signing up adds no credit (https://docs.looot.ai/money).
+- Optional, an Anthropic API key for the model-written summary. Off by default.
+
+There is no Supabase and no sign-in in this repo.
+
+## Try it in one minute
+
+No account and no token.
+
+```bash
+git clone https://github.com/loootai/looot-battlecards.git
+cd looot-battlecards
+npm install --ignore-scripts
+npm run demo
+```
+
+The web UI opens at http://localhost:3231 (`next dev -p 3231`) with invented competitors and no network calls. If port 3231 is busy, run `NEXT_PUBLIC_DEMO=1 npx next dev -p 3232`. For the same cards as files, run `npm run cards -- --demo`, which writes `cards/<domain>.json`, `.md`, `.html` and `cards/index.md` and prints `Charged by looot: $0.0000.`
+
+## Run it with your own data
+
+Copy the example env file. The web UI (Next.js) reads `.env.local`. The CLI does not read any env file, so load it into your shell first.
+
+```bash
+cp .env.example .env.local     # then put your token in LOOOT_TOKEN
+set -a; source .env.local; set +a
+```
+
+| Variable | Required | What it does | Where to get it |
+| --- | --- | --- | --- |
+| `LOOOT_TOKEN` | Yes for a real run. Not needed for `--dry-run`, `--demo` or `npm run demo`. | The looot agent token. Server side only, never sent to the browser. | `looot login`, or Settings, "Agent tokens" in the looot web app |
+| `LOOOT_API_URL` | Optional | looot API base URL. Default `https://api.looot.ai`. Also used when reading live prices. | Leave unset |
+| `CARDS_DIR` | Optional | Folder where the web UI reads and writes cards. Default `./cards`. The CLI uses `--out` instead. | Any folder you own |
+| `NEXT_PUBLIC_DEMO` | Optional | `1` shows the invented demo data and blocks every looot call. `npm run demo` sets it for you. | Do not set it for real runs |
+| `ANTHROPIC_API_KEY` | Optional | Turns on the model-written summary when you pass `--summary`. Without it `--summary` prints a notice and builds the cards without a summary. | https://console.anthropic.com |
+| `BATTLECARDS_LLM_MODEL` | Optional | Model for the summary. Default `claude-sonnet-5-5`. | Your Anthropic account |
+
+Put your product and competitors in a YAML file.
+
+```bash
+cp battlecards.example.yaml battlecards.yaml    # then edit it
+```
+
+`battlecards.example.yaml` has an invented product (Tallyroom) and two invented competitors (domains end in `.example`). Per competitor you can set `pricingUrl` and `careersUrl` when those pages are not at `/pricing` and `/careers`. `signals` limits which of the seven signals run. You can skip the file with `--product "Acme" --competitors a.com,b.com`.
+
+Price first. A dry run needs no token and makes no call. It uses the list prices dated 2026-10-10. This is the real output of `npm run cards -- --config battlecards.example.yaml --dry-run`:
+
+```text
+Plan: 2 competitor(s), 16 calls, list price $0.03052 (list prices dated 2026-10-10). Cap $0.2500.
+    6 x jina-reader  $0.0002
+    2 x serper-news  $0.0010
+    2 x tomba-technology  $0.0089
+    2 x serper-search  $0.0010
+    2 x scrapecreators-facebook-adlibrary-company-ads-get  $0.00188
+    2 x scrapecreators-linkedin-ads-search  $0.00188
+Dry run: no looot call was made and nothing was written.
+```
+
+Then the real run. The example domains are invented, so put your own competitors in the file first:
+
+```bash
+npm run cards -- --config battlecards.yaml --max-spend 0.25
+```
+
+Options: `--signals pricing,news`, `--out cards`, `--summary`, `--max-spend <usd>`. Before it runs, the CLI reads live prices from the catalog and prints the plan again. Output goes to `cards/<domain>.json`, `.md`, `.html` and `cards/index.md`, plus `cards/product.json`. Open a `.html` file and use Print, Save as PDF. The CLI exits with 2 on bad input or a missing token, and with 1 only when every section of every card failed.
+
+Web UI on live data. Load your token as above and run `npm run dev`, then open http://localhost:3000/build. Press "Get a quote (free)", then "Build for up to ...". The build button appears only after a quote. The server refuses with a 409 if the confirmed maximum is below the quote. Cards are written to `CARDS_DIR`. There is no sign-in. Run the UI behind your own auth if you host it.
+
+## Spending
+
+looot shows the price before each paid action, and so does this repo. The CLI prints the plan with `--dry-run` or before a run, and the UI shows the quote before the Build button appears. The spend cap is `--max-spend` in the CLI (default $1.00, or `maxSpendUsd` in the config file) and "Spend cap for this run, in dollars" in the web UI. A competitor costs about $0.015 at list prices, so $0.0763 for 5 and $0.153 for 10 (all 7 signals). Failed calls are not charged by looot.
 
 | Section | looot job | Endpoint | List price per call | What the extractor reads |
 | --- | --- | --- | --- | --- |
@@ -36,48 +111,43 @@ An open-source alternative to Klue and Crayon. Neither publishes a starting pric
 
 Prices are list prices read from the free public catalog on 2026-10-10. A real run re-reads them first and refuses to call an endpoint whose live price it cannot read.
 
-Cost of a typical run, all 7 signals at list price: $0.0153 per competitor, so $0.0763 for 5 competitors and $0.153 for 10.
-
 Dropped, because looot has no provider for it: win-loss interviews, CRM and call-recording insights, and a Slack or CRM publishing step. Google Ads are not read: the cheapest provider is $0.0064 a call and the Meta and LinkedIn libraries cover most B2B ad angles. For ongoing alerts when a competitor page changes, use [looot-monitor](https://github.com/loootai/looot-monitor). This repo does not rebuild it.
 
-## Run it
-
-Three ways, one engine.
-
-```bash
-npm install
-npm run demo          # web UI with sample data on http://localhost:3231, no token, no network
-npm run cards -- --demo
-```
-
-Headless CLI:
-
-```bash
-cp battlecards.example.yaml battlecards.yaml    # or pass --product and --competitors
-npm run cards -- --config battlecards.yaml --dry-run          # prints the plan and the list-price cost, no call
-LOOOT_TOKEN=... npm run cards -- --config battlecards.yaml --max-spend 0.25
-```
-
-Options: `--signals pricing,news`, `--out cards`, `--summary`, `--max-spend <usd>`. Output goes to `cards/<domain>.json`, `.md`, `.html` and `cards/index.md`.
-
-Web UI on live data: `LOOOT_TOKEN=... npm run dev`. The Build page asks for a quote first (free), then builds for up to the quoted amount. Supabase is not used and no sign-in exists. Run the UI behind your own auth if you host it.
-
-## Money rules
+Rules the code enforces.
 
 - The quote comes first. The CLI prints it with `--dry-run`, the UI shows it before the Build button appears.
 - The spend cap is checked against list prices before each call. A call that would pass it is skipped and never sent.
 - Each call carries an idempotency key made from the competitor, the call input, the endpoint and the day. Running the same input twice in one day replays the stored run and charges nothing more.
 - A run that is still going when waiting stops (60 seconds) is "pending", not "failed". Failed calls are not charged by looot.
 
-## Install for agents
+## Deploy
 
-- Read [llms.txt](llms.txt).
-- Claude Code skill: copy `skills/battlecards` to `~/.claude/skills/battlecards`. It prices the run, asks for a yes, runs the CLI and reports gaps as they are.
-- Requires an agent token from https://looot.ai/settings in `LOOOT_TOKEN`.
+This repo has no `vercel.json` and no GitHub workflow. The web UI writes cards to a folder (`CARDS_DIR`, default `./cards`), which Vercel does not keep between requests and may not let you write, so run it on your own machine or a server with a disk. If you still import it into Vercel, set `LOOOT_TOKEN`, and `ANTHROPIC_API_KEY` only if you want summaries, as environment variables. The saved cards will not last. The CLI needs no deploy. To run it on a schedule, call it from cron or your own CI with `LOOOT_TOKEN` set.
 
-## What is not tested
+## Troubleshooting
 
-No paid looot run was made. The code and fixtures follow the endpoint descriptions in the looot catalog and the shapes of the sibling repo [looot-monitor](https://github.com/loootai/looot-monitor). Parsing for `jina-reader` pages, `tomba-technology`, and the two ad libraries is built from the docs and hand-written fixtures, not from captured responses, so expect to adjust field names after your first real run. Pricing and careers extraction depends on the page being readable as markdown: pages that load prices with scripts come back empty, and the card says so. Review themes are keyword rules on search snippets, which is a weak signal, and the card quotes the snippet so you can judge it. All demo brands are invented.
+| What you see | Cause and fix |
+| --- | --- |
+| `LOOOT_TOKEN is not set. Create an agent token at https://looot.ai/settings, or use --demo or --dry-run.` | The CLI found no token. Run `set -a; source .env.local; set +a` or `export LOOOT_TOKEN=...`. The token page is Settings, "Agent tokens" in the looot web app. Exit code 2. |
+| `LOOOT_TOKEN is not set on the server.` (HTTP 503 from the web UI) | Put `LOOOT_TOKEN` in `.env.local` and restart `npm run dev`. |
+| `Demo mode makes no looot call and writes nothing. Run without NEXT_PUBLIC_DEMO to build real cards.` | You started with `npm run demo`. Use `npm run dev`. |
+| A section shows "Failed" or "Skipped" with the looot error text as its note | The text comes from the looot API. A 401 means the token is wrong, revoked or lacks a scope (it needs `runs.execute`, `catalog.read`, `runs.read`, `usage.read`). A balance error means the account has no credit, so top up at https://docs.looot.ai/money. Failed calls cost nothing. |
+| `The spend cap would be passed.` | The call was skipped and not sent. Raise `--max-spend` if you accept the price. |
+| `The live price could not be read.` | The catalog price for that endpoint could not be read, so the call was skipped. Try again, or check `LOOOT_API_URL`. |
+| `Still queued when waiting stopped. Read run <id> later.` (the status word can differ) | The section is pending. Run the same command again on the same day. The stored run is replayed and not charged twice. |
+| `No prices found on the page. It may load prices with scripts or sit at another URL. Set pricingUrl for this competitor.` | The page came back empty as markdown. Set `pricingUrl` in the config. |
+| `No job titles recognised on the careers page. Set careersUrl for this competitor.` | Set `careersUrl` in the config. |
+| `The call worked but nothing readable came back.` | The call succeeded but the parser read no claims. Either the data is not there, or the response has a shape the parser does not know. See Status. |
+| `--summary needs ANTHROPIC_API_KEY. Cards were built without it.` | Set `ANTHROPIC_API_KEY`. If the summary call fails the card is kept without a summary and no message is shown. |
+| `Every section failed.` | Exit code 1. Read the notes in `cards/index.md`. Usually the token or balance. |
+| `Give 1 to 10 competitors.`, `"x" is not a domain.`, `Unknown signal "x". Known: ...`, `--max-spend must be a positive number of dollars.` | Fix the config or flags. Exit code 2. |
+
+How to file an issue. Open an issue at https://github.com/loootai/looot-battlecards/issues with the run id (a pending note prints it; otherwise give the endpoint id and the time of the call), the command you used, and the raw response body with secrets removed. The `.json` card shows each section's status and note.
+
+## Status
+
+No paid looot run was made. The code and fixtures follow the endpoint descriptions in the looot catalog and the shapes of the sibling repo [looot-monitor](https://github.com/loootai/looot-monitor). Parsing for `jina-reader` pages, `tomba-technology`, and the two ad libraries is built from the docs and hand-written fixtures, not from captured responses, so expect to adjust field names after your first real run. If a section comes back empty or wrong, open an issue with the raw response (see Troubleshooting). Pricing and careers extraction depends on the page being readable as markdown: pages that load prices with scripts come back empty, and the card says so. Review themes are keyword rules on search snippets, which is a weak signal, and the card quotes the snippet so you can judge it. All demo brands are invented.
+
 
 ## Develop
 
@@ -86,6 +156,12 @@ npm test && npm run typecheck && npm run lint && npm run build
 npm run leak-scan
 git config core.hooksPath .githooks
 ```
+
+## Install for agents
+
+- Read [llms.txt](llms.txt).
+- Claude Code skill: copy `skills/battlecards` to `~/.claude/skills/battlecards`. It prices the run, asks for a yes, runs the CLI and reports gaps as they are.
+- Requires an agent token in `LOOOT_TOKEN`. See "What you need".
 
 ## Licence
 

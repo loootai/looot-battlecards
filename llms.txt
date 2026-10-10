@@ -8,6 +8,10 @@
 - Real run: `LOOOT_TOKEN=... npm run cards -- --config battlecards.yaml --max-spend 0.25`
 - Output: `cards/<domain>.json|md|html` and `cards/index.md`
 
+## Setup in short
+- Node 22.12 or newer. Token: `looot login`, or Settings > Agent tokens in the looot web app; scopes runs.execute, catalog.read, runs.read, usage.read. A real run needs a funded balance (minimum $5).
+- The CLI reads LOOOT_TOKEN from the shell, not from a file. Full steps, env table and troubleshooting are in README.md under "What you need", "Run it with your own data" and "Troubleshooting".
+
 ## Rules
 - Always run `--dry-run` first and show the list-price cost to the user.
 - A run never passes `--max-spend`. A call that would pass it is skipped, not sent.
