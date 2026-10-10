@@ -1,6 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import Link from "next/link";
+import { AppShell, type ShellNavSection } from "@/components/AppShell";
+import { usdPrecise } from "@/lib/money";
+import { isDemo, loadCards } from "@/lib/store";
 import "./globals.css";
+
+export const dynamic = "force-dynamic";
+
+const NAV: ShellNavSection[] = [
+  {
+    items: [
+      { href: "/", label: "Battlecards", icon: "swords", also: ["/card"] },
+      { href: "/build", label: "Build", icon: "play" },
+    ],
+  },
+];
 
 export const metadata: Metadata = {
   title: { default: "looot-battlecards", template: "%s | looot-battlecards" },
@@ -20,30 +33,24 @@ export const viewport: Viewport = {
 // Sets the theme class before the first paint. ?theme=dark or ?theme=light overrides the saved choice for one view.
 const themeScript = `(function(){try{var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("theme")||"system";var d=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d)}catch(e){}})()`;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const { cards } = await loadCards();
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-dvh bg-page text-ink">
-        <header className="border-b border-line bg-panel">
-          <div className="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3">
-            <Link href="/" className="flex items-center gap-2 font-semibold">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/looot-mark.svg" alt="" width={20} height={20} className="dark:hidden" />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/looot-mark-white.svg" alt="" width={20} height={20} className="hidden dark:block" />
-              looot-battlecards
-            </Link>
-            <nav className="flex gap-4 text-mute">
-              <Link href="/" className="hover:text-ink">Battlecards</Link>
-              <Link href="/build" className="hover:text-ink">Build</Link>
-            </nav>
-            {process.env.NEXT_PUBLIC_DEMO === "1" && <span className="ml-auto rounded bg-amber-soft px-2 py-0.5 text-12 text-amber">Demo data, no looot calls</span>}
-          </div>
-        </header>
-        <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+        <AppShell
+          appName="looot-battlecards"
+          githubHref="https://github.com/loootai/looot-battlecards"
+          nav={NAV}
+          demoLabel={isDemo() ? "Demo data, no looot calls" : undefined}
+          spend={cards.length > 0 ? { label: "Charged by looot", spent: usdPrecise(cards.reduce((n, c) => n + c.costMicros, 0)) } : undefined}
+          primaryAction={{ href: "/build", label: "Build cards" }}
+        >
+          <div className="mx-auto max-w-5xl px-4 py-8">{children}</div>
+        </AppShell>
       </body>
     </html>
   );

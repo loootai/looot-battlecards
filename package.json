@@ -1,6 +1,6 @@
 {
   "name": "looot-battlecards",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Open-source competitive battlecards: pricing, positioning, news, hiring, tech stack, reviews and ads for each competitor, with a source and date on every claim. Next.js and looot.",
   "license": "MIT",
   "private": true,
