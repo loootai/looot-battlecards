@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEMO_CONFIG, DEMO_NOW, fixtureRunner } from "@/demo/fixtures";
 import type { LoootRunner } from "@/lib/looot";
-import { buildCards, idempotencyKey, planCalls, quoteOf } from "./engine";
+import { buildCards, idempotencyKey, planCalls, quoteOf, REFRESH_MS } from "./engine";
 import { cardHtml, cardMarkdown } from "./render";
 import { FALLBACK_PRICES } from "./signals";
 import { addSummary, summaryPrompt } from "./summary";
@@ -16,10 +16,10 @@ describe("plan and quote", () => {
   it("flags a plan over the cap", () => {
     expect(quoteOf({ ...DEMO_CONFIG, maxSpendMicros: 1000 }, FALLBACK_PRICES).overCap).toBe(true);
   });
-  it("gives the same idempotency key for the same call on the same day and another on the next day", () => {
+  it("gives the same idempotency key for the same call on every day of one refresh window", () => {
     const [call] = planCalls(DEMO_CONFIG);
-    expect(idempotencyKey(call, DEMO_NOW)).toBe(idempotencyKey(call, new Date("2026-10-10T20:00:00Z")));
-    expect(idempotencyKey(call, DEMO_NOW)).not.toBe(idempotencyKey(call, new Date("2026-10-11T00:00:00Z")));
+    expect(idempotencyKey(call, DEMO_NOW)).toBe(idempotencyKey(call, new Date(DEMO_NOW.getTime() + 3_600_000)));
+    expect(idempotencyKey(call, DEMO_NOW)).not.toBe(idempotencyKey(call, new Date(DEMO_NOW.getTime() + REFRESH_MS)));
   });
 });
 

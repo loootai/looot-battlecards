@@ -26,6 +26,9 @@ export async function signIn(): Promise<{ cookie: string; token: string; headers
 export function freshEnv(): void {
   mkdirSync(join(process.cwd(), ".vitest"), { recursive: true });
   process.env.CARDS_DIR = mkdtempSync(join(process.cwd(), ".vitest", "cards-"));
+  process.env.LOOOT_BATTLECARDS_DATA_DIR = mkdtempSync(join(process.cwd(), ".vitest", "budget-"));
+  delete process.env.LOOOT_BATTLECARDS_DAILY_USD;
+  delete process.env.LOOOT_BATTLECARDS_MONTHLY_USD;
   process.env.BATTLECARDS_ADMIN_PASSWORD = PW;
   delete process.env.NEXT_PUBLIC_DEMO;
   delete process.env.LOOOT_TOKEN;

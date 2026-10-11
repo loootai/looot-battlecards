@@ -2,14 +2,15 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { buildConfig, ConfigError, parseConfig } from "@/engine/config";
-import { buildCards, quoteOf } from "@/engine/engine";
+import { buildCards, payableMicros, quoteOf } from "@/engine/engine";
 import { writeOutputs } from "@/engine/output";
 import { PRICES_AS_OF, FALLBACK_PRICES } from "@/engine/signals";
 import { addSummary, summaryEnabled } from "@/engine/summary";
 import type { BattlecardConfig } from "@/engine/types";
 import { DEMO_CONFIG, DEMO_NOW, fixtureRunner } from "@/demo/fixtures";
-import { LoootError, loootFromEnv } from "@/lib/looot";
-import { usdPrecise } from "@/lib/money";
+import { Budget, budgetFile, defaultLimits } from "@/lib/budget";
+import { LoootError, loootFromEnv, type LoootRun } from "@/lib/looot";
+import { usd, usdPrecise } from "@/lib/money";
 import { fetchPrices } from "@/lib/prices";
 
 const HELP = `Usage: npm run cards -- [options]
@@ -23,11 +24,15 @@ Options:
   --max-spend <usd>      Spend cap for the run. Default 1.00 (or maxSpendUsd in the config).
   --signals <list>       Comma list: pricing,positioning,news,hiring,tech,reviews,ads. Default all.
   --out <dir>            Where cards go (.json, .md, .html per competitor). Default: cards
+  --fresh <tag>          Look again even if the same input ran inside the last 7 days. Charged again, once per tag.
+  --partial              Run until the cap or the period budget is reached, even when the quote is above what is left.
   --summary              Add an LLM summary to each card. Needs ANTHROPIC_API_KEY.
   --dry-run              Print the plan and the list-price cost. Make no call.
   --help
 
-Needs LOOOT_TOKEN in the environment, except with --demo or --dry-run.`;
+Needs LOOOT_TOKEN in the environment, except with --demo or --dry-run.
+The period budget (daily and monthly) lives in .looot-data/budget.json (LOOOT_BATTLECARDS_DATA_DIR). LOOOT_BATTLECARDS_DAILY_USD and
+LOOOT_BATTLECARDS_MONTHLY_USD set the starting amounts (default 10 and 50) until the owner saves new ones in the web UI.`;
 
 function fail(message: string, code = 1): never {
   console.error(message);
@@ -52,7 +57,7 @@ function parse() {
     options: {
       config: { type: "string" }, product: { type: "string" }, competitors: { type: "string" }, demo: { type: "boolean", default: false },
       "max-spend": { type: "string" }, signals: { type: "string" }, out: { type: "string", default: "cards" },
-      summary: { type: "boolean", default: false }, "dry-run": { type: "boolean", default: false }, help: { type: "boolean", default: false },
+      summary: { type: "boolean", default: false }, "dry-run": { type: "boolean", default: false }, fresh: { type: "string" }, partial: { type: "boolean", default: false }, help: { type: "boolean", default: false },
     },
   }).values;
 }
@@ -96,7 +101,19 @@ async function main(): Promise<void> {
     }
   }
   const now = args.demo ? DEMO_NOW : new Date();
-  const result = await buildCards(config, { looot, prices: priced.prices, unpriced: new Set(priced.unread), now });
+  // Check order: quote, per-run cap, period budget, then the calls. Runs that ended since last time settle first.
+  let ledger: Budget | undefined;
+  if (!args.demo) {
+    ledger = new Budget(budgetFile(), defaultLimits());
+    if ("getRun" in looot) await ledger.reconcile(looot as unknown as { getRun(id: string): Promise<LoootRun> }, now).catch(() => undefined);
+    const room = await ledger.status(now);
+    console.log(`Budget left: ${usd(room.remainingMicros)} (${usd(room.day.remainingMicros)} today, ${usd(room.month.remainingMicros)} this month, ${usd(room.day.reservedMicros)} reserved).`);
+    const toCharge = Math.min(await payableMicros(quote.calls, ledger, now, priced.prices, args.fresh), config.maxSpendMicros);
+    if (toCharge > room.remainingMicros && !args.partial) {
+      fail("Refused: the quote is above what is left of the period budget. Wait for the period to roll over, raise the budget on the Costs page of the web UI, or pass --partial to run until it is reached.", 2);
+    }
+  }
+  const result = await buildCards(config, { looot, prices: priced.prices, unpriced: new Set(priced.unread), now, ledger, freshTag: args.fresh });
   let cards = result.cards;
   if (args.summary) {
     if (!summaryEnabled()) console.log("--summary needs ANTHROPIC_API_KEY. Cards were built without it.");

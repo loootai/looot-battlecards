@@ -98,13 +98,26 @@ Then the real run. The example domains are invented, so put your own competitors
 npm run cards -- --config battlecards.yaml --max-spend 0.25
 ```
 
-Options: `--signals pricing,news`, `--out cards`, `--summary`, `--max-spend <usd>`. Before it runs, the CLI reads live prices from the catalog and prints the plan again. Output goes to `cards/<domain>.json`, `.md`, `.html` and `cards/index.md`, plus `cards/product.json`. Open a `.html` file and use Print, Save as PDF. The CLI exits with 2 on bad input or a missing token, and with 1 only when every section of every card failed.
+Options: `--signals pricing,news`, `--out cards`, `--summary`, `--max-spend <usd>`, `--fresh <tag>`, `--partial`. Before it runs, the CLI reads live prices from the catalog and prints the plan again. Output goes to `cards/<domain>.json`, `.md`, `.html` and `cards/index.md`, plus `cards/product.json`. Open a `.html` file and use Print, Save as PDF. The CLI exits with 2 on bad input or a missing token, and with 1 only when every section of every card failed.
 
 Web UI on live data. Load your token as above and run `npm run dev`, then open http://localhost:3000/build. Press "Get a quote (free)", then "Build for up to ...". The build button appears only after a quote. The server refuses with a 409 if the confirmed maximum is below the quote, or if the quote token from the quote step is missing, expired or for different input. The spend cap is `BATTLECARDS_MAX_SPEND_USD` on the server (default $1). Nothing in a request can change it. Cards are written to `CARDS_DIR`. The UI needs the admin password, see [Securing a deployment](#securing-a-deployment).
 
 ## Spending
 
-looot shows the price before each paid action, and so does this repo. The CLI prints the plan with `--dry-run` or before a run, and the UI shows the quote before the Build button appears. The spend cap is `--max-spend` in the CLI (default $1.00, or `maxSpendUsd` in the config file) and `BATTLECARDS_MAX_SPEND_USD` on the server for the web UI (default $1, not editable from the page). A competitor costs about $0.015 at list prices, so $0.0763 for 5 and $0.153 for 10 (all 7 signals). Failed calls are not charged by looot.
+looot shows the price before each paid action, and so does this repo. The CLI prints the plan with `--dry-run` or before a run, and the UI shows the quote before the Build button appears. A competitor costs about $0.015 at list prices, so $0.0763 for 5 and $0.153 for 10 (all 7 signals). Failed calls are not charged by looot.
+
+Four limits stand between a request and a charge, checked in this order: the quote, the cap per run, the period budget, then the call.
+
+- The quote is printed first. The cap per run is `--max-spend` in the CLI (default $1.00, or `maxSpendUsd` in the config file) and `BATTLECARDS_MAX_SPEND_USD` on the server for the web UI (default $1; the page shows it and cannot change it). A cap in a request body is ignored.
+- The period budget caps all builds together: a daily and a monthly amount (UTC), $10 and $50 until you change them. The owner changes them on the Costs page of the web UI, or sets the starting values with `LOOOT_BATTLECARDS_DAILY_USD` and `LOOOT_BATTLECARDS_MONTHLY_USD`. A request to `/api/build` cannot carry a budget: one with a budget field is refused with 400. The CLI refuses a run whose chargeable quote is above what is left, unless you pass `--partial`.
+- Before each paid call the app reserves its list price in `budget.json` (in `LOOOT_BATTLECARDS_DATA_DIR`, default `.looot-data`), under a lock file, and refuses the call if used plus reserved plus the price would pass the daily or the monthly budget. Two builds started together cannot both pass. When the call ends the reservation becomes the real charge. A call looot refused with an HTTP answer releases it. A call still running at looot (`pending`) keeps its reservation: it is never recorded as failed at $0 and the budget is never handed back early.
+- The next build looks up every pending call with `GET /v1/runs/{id}` and settles the ones that ended, to their real cost. If looot cannot be reached, or the app died before it got a run id, the reservation stays for 24 hours and is then released.
+- The sidebar and the Costs page show used, reserved and remaining for today and this month. At the budget the build is refused with a message that names the limit.
+- Every call has a stable key made from the competitor, the signal, the endpoint and the normalised input. No date or time goes in, and no call input carries one (the news search uses the relative window `qdr:m`). A finished call is stored in `budget.json` for 40 days. Repeating the same request is answered from the stored result: no call, no charge, and the up-front budget check ignores it.
+- Cards are reused for a refresh window of 7 days (`floor(time / 7 days)` is part of the key). The first build in a new window is an explicit new request with its own key. `--fresh <tag>` in the CLI looks again inside a window, once per tag.
+- The looot token balance is the final limit. Fund a dedicated token with only what you are willing to spend, and keep the budget below it.
+
+The budget lives in a file, so run one instance on a disk that persists. Several instances, or a serverless host with a throwaway disk, do not share it.
 
 | Section | looot job | Endpoint | List price per call | What the extractor reads |
 | --- | --- | --- | --- | --- |
@@ -123,9 +136,9 @@ Dropped, because looot has no provider for it: win-loss interviews, CRM and call
 Rules the code enforces.
 
 - The quote comes first. The CLI prints it with `--dry-run`, the UI shows it before the Build button appears.
-- The spend cap is checked against list prices before each call. A call that would pass it is skipped and never sent.
-- Each call carries an idempotency key made from the competitor, the call input, the endpoint and the day. Running the same input twice in one day replays the stored run and charges nothing more.
-- A run that is still going when waiting stops (60 seconds) is "pending", not "failed". Failed calls are not charged by looot.
+- The spend cap and the period budget are checked against list prices before each call. A call that would pass either is skipped and never sent.
+- Each call carries a stable idempotency key made from the competitor, the signal, the endpoint, the normalised input and the 7-day refresh window. Running the same input again is answered from the stored result and charges nothing more. `--fresh <tag>` changes the key when you want a new build.
+- A run that is still going when waiting stops (60 seconds) is "pending", not "failed". It keeps its reservation in the period budget until it ends. Failed calls are not charged by looot.
 
 ## Securing a deployment
 
@@ -139,8 +152,8 @@ Pages and routes were listed from `src/app` and classified. A test reads the fol
 | --- | --- | --- |
 | Public by design | 4 routes | `/api/health`, `/login`, `/api/auth/login`, `/api/auth/logout` |
 | Public static files | 2 | `/favicon.ico`, `/brand/*` |
-| Admin pages | 3 | `/` (cards), `/build`, `/card/[domain]` |
-| Admin API | 3 | `/api/quote` (free), `/api/build` (paid looot run), `/api/export/[domain]` (downloads a card) |
+| Admin pages | 4 | `/` (cards), `/build`, `/card/[domain]`, `/costs` (budget and cost) |
+| Admin API | 4 | `/api/quote` (free), `/api/build` (paid looot run), `/api/budget` (read, and change the period budget), `/api/export/[domain]` (downloads a card) |
 
 There are no server actions and no webhooks. Any path not listed is treated as admin.
 
@@ -160,6 +173,7 @@ There are no server actions and no webhooks. Any path not listed is treated as a
 - `/api/build` runs only with the token that `/api/quote` issued to the same session for the same product, strengths, competitors and signals, within 10 minutes. It also needs a confirmed maximum at or above the live quote. The spend is the lower of the cap and the confirmed maximum.
 - Per session: 6 builds an hour and 30 quotes every 10 minutes, then 429 with `Retry-After`. The counters live in memory, so behind several instances also rate limit at the proxy.
 - Product names are capped at 100 characters, strengths at 10 lines of 200 characters, competitors at 10.
+- The period budget (`PUT /api/budget`) is changed only by the signed-in owner, with the CSRF token. A build request cannot raise it, and one that carries a budget field is refused. See [Spending](#spending). The budget file needs one instance on a persistent disk. The looot token balance is the final limit, so give the app a token funded with only what you are willing to spend.
 - The web build never calls Anthropic. Only the CLI does, with `--summary`.
 
 ### Setup
@@ -196,7 +210,7 @@ This repo has no `vercel.json` and no GitHub workflow. The web UI writes cards t
 | A section shows "Failed" or "Skipped" with the looot error text as its note | The text comes from the looot API. A 401 means the token is wrong, revoked or lacks a scope (it needs `runs.execute`, `catalog.read`, `runs.read`, `usage.read`). A balance error means the account has no credit, so top up at https://docs.looot.ai/money. Failed calls cost nothing. |
 | `The spend cap would be passed.` | The call was skipped and not sent. Raise `--max-spend` if you accept the price. |
 | `The live price could not be read.` | The catalog price for that endpoint could not be read, so the call was skipped. Try again, or check `LOOOT_API_URL`. |
-| `Still queued when waiting stopped. Read run <id> later.` (the status word can differ) | The section is pending. Run the same command again on the same day. The stored run is replayed and not charged twice. |
+| `Still queued when waiting stopped. Read run <id> later.` (the status word can differ) | The section is pending. Run the same command again. Its budget stays reserved, the next run settles it, and the stored run is replayed and not charged twice. |
 | `No prices found on the page. It may load prices with scripts or sit at another URL. Set pricingUrl for this competitor.` | The page came back empty as markdown. Set `pricingUrl` in the config. |
 | `No job titles recognised on the careers page. Set careersUrl for this competitor.` | Set `careersUrl` in the config. |
 | `The call worked but nothing readable came back.` | The call succeeded but the parser read no claims. Either the data is not there, or the response has a shape the parser does not know. See Status. |

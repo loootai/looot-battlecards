@@ -2,6 +2,29 @@
 
 Built from the GitHub release notes. Each version links to its release page.
 
+## 0.1.5 (2026-10-11)
+
+Spend limits, version 2. Before this, a build was limited only by the cap per build, an in-memory rate limit and the token balance. Nothing limited spend across builds, two builds started together could both pass, a key with the day in it made a repeat on a new day pay again, and the cap in the engine was checked against a counter that each run kept for itself.
+
+What changed
+
+- Period budget: a daily and a monthly amount (UTC), $10 and $50 by default, saved in `budget.json` in `LOOOT_BATTLECARDS_DATA_DIR` (default `.looot-data`). The signed-in owner changes it on the new Costs page (`PUT /api/budget`, session and CSRF token). `LOOOT_BATTLECARDS_DAILY_USD` and `LOOOT_BATTLECARDS_MONTHLY_USD` set the starting values. A build request cannot raise it, and one that carries a budget field is refused with 400. The cap per build still comes only from the server (`BATTLECARDS_MAX_SPEND_USD`); a cap in a request is ignored.
+- Check order: the quote, the cap per build, an atomic reservation against the period budget, then the call.
+- Reserve then settle: each paid call reserves its list price under a lock file before it is made, and is refused if used plus reserved plus the price would pass either budget. The reservation becomes the real cost when the call ends and goes back when looot answers with an error. A call still running keeps it and is never counted as $0. The next build looks up pending calls with `GET /v1/runs/{id}` and settles them. A reservation that cannot be looked up is released after 24 hours.
+- Stable keys: the key was a hash of the input plus the day. It is now a hash of the competitor, signal, endpoint and normalised input, plus a 7-day refresh window (`floor(time / 7 days)`). No date or clock time goes in. No call input carries a date: the news search uses the relative window `qdr:m`, and a test fails if one appears. `--fresh <tag>` gives every call a new stable key for the tag.
+- Stored results: a finished call is stored for 40 days under its key, so the same request is answered with no call and no charge. The up-front budget check ignores calls that have a stored answer.
+- Per-run cap race fixed: calls started together now count against the cap before the first await, so they cannot all pass.
+- The sidebar spend panel and the Costs page show used, reserved and remaining for today and this month. The CLI prints what is left before a run and takes `--partial` and `--fresh`.
+- Call status `skipped_budget` is new: a section skipped because the period budget was reached.
+
+For upgraders
+
+- No migration. This repo has no database. `budget.json` is a new file. Run one instance on a persistent disk, since the file is not shared between hosts.
+- `/api/budget` and `/costs` are new admin routes. The route map and its tests include them.
+- Keys changed shape, so the first build after upgrading pays once for calls that ran earlier. Cards are now reused for 7 days instead of 1 day, so a second build on the next day is free. Pass `--fresh <tag>` in the CLI to look again sooner.
+
+[Release page](https://github.com/loootai/looot-battlecards/releases/tag/v0.1.5)
+
 ## 0.1.4 (2026-10-11)
 
 **Security fix. Earlier versions had no admin authentication.** Versions 0.1.3 and older served every page and API route of the web UI with no sign-in. Anyone who could reach a running copy could read the stored cards, download them, and start paid looot runs on the server's token. If you run v0.1.3 or older on a host other than your own machine, upgrade to v0.1.4 and set `BATTLECARDS_ADMIN_PASSWORD` (12 or more characters) before you expose it. The CLI is not affected.

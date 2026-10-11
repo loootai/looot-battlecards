@@ -1,10 +1,13 @@
 import { writeOutputs } from "@/engine/output";
-import { buildCards } from "@/engine/engine";
+import { buildCards, payableMicros } from "@/engine/engine";
 import { requireAdminRoute, sessionIdOf } from "@/lib/auth/guard";
 import { allow, retryAfter } from "@/lib/auth/limits";
 import { planKey, quoteTokenOk } from "@/lib/auth/quoteToken";
+import { budgetFieldError } from "@/lib/budget";
+import { getBudget } from "@/lib/budgetService";
 import { ConfigError, planFromRequest, type PlanRequest } from "@/lib/buildApi";
 import { LoootError, loootFromEnv } from "@/lib/looot";
+import { usd } from "@/lib/money";
 import { cardsDir, isDemo } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +21,9 @@ const BUILD_WINDOW_MS = 60 * 60_000;
 /**
  * Paid. Needs the admin session and CSRF token. Builds the cards only when the caller sends the token
  * the quote step issued for this exact plan, and confirms a maximum at or above the live quote.
- * The cap is the server's (BATTLECARDS_MAX_SPEND_USD). The caller can only lower the spend, never raise the cap.
+ * The cap is the server's (BATTLECARDS_MAX_SPEND_USD) and the period budget is the owner's (Costs page). The caller can
+ * only lower the spend, never raise the cap. A request that carries a budget field is refused.
+ * Check order: the quote, the cap per build, the period budget (one atomic reservation per call), then the call.
  * A quote that moved above the confirmed maximum answers 409 with the new quote and runs nothing.
  */
 export async function POST(req: Request) {
@@ -33,6 +38,8 @@ export async function POST(req: Request) {
   } catch {
     return Response.json({ error: "Send JSON." }, { status: 400, headers: NO_STORE });
   }
+  const refused = budgetFieldError(body);
+  if (refused) return Response.json({ error: refused }, { status: 400, headers: NO_STORE });
   try {
     const p = await planFromRequest(body);
     const confirmed = Math.round(Number(body.confirmedMaxUsd) * 1_000_000);
@@ -50,7 +57,18 @@ export async function POST(req: Request) {
       if (e instanceof LoootError) return Response.json({ error: "LOOOT_TOKEN is not set on the server." }, { status: 503, headers: NO_STORE });
       throw e;
     }
-    const result = await buildCards({ ...p.config, maxSpendMicros: Math.min(p.config.maxSpendMicros, confirmed) }, { looot, prices: p.prices, unpriced: new Set(p.unread), now: new Date() });
+    const now = new Date();
+    const budget = getBudget();
+    await budget.reconcile(looot, now).catch(() => undefined);
+    const room = await budget.status(now);
+    const toCharge = await payableMicros(p.quote.calls, budget, now, p.prices);
+    if (toCharge > room.remainingMicros) {
+      return Response.json(
+        { error: `The quote (${usd(toCharge)}) is above what is left of the budget (${usd(room.remainingMicros)}: ${usd(room.day.remainingMicros)} today, ${usd(room.month.remainingMicros)} this month). Nothing was called. Raise the budget on the Costs page, or wait for the period to roll over.`, code: "budget" },
+        { status: 409, headers: NO_STORE },
+      );
+    }
+    const result = await buildCards({ ...p.config, maxSpendMicros: Math.min(p.config.maxSpendMicros, confirmed) }, { looot, prices: p.prices, unpriced: new Set(p.unread), now, ledger: budget });
     writeOutputs(cardsDir(), result.cards, p.config.product, result.actualMicros);
     return Response.json({ cards: result.cards.length, chargedMicros: result.actualMicros }, { headers: NO_STORE });
   } catch (e) {
