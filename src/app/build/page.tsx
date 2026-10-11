@@ -1,8 +1,10 @@
 import { BuildForm } from "@/components/BuildForm";
+import { requireAdminPage } from "@/lib/auth/guard";
 
 export const metadata = { title: "Build" };
 
-export default function BuildPage() {
+export default async function BuildPage() {
+  await requireAdminPage();
   return (
     <div className="max-w-xl space-y-4">
       <h1 className="text-20 font-semibold">Build battlecards</h1>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { adminFetch } from "./adminFetch";
 
 interface QuoteAnswer {
   totalMicros: number;
@@ -11,6 +12,7 @@ interface QuoteAnswer {
   lines: { endpointId: string; calls: number; priceMicros: number }[];
   priceSource: string;
   unread: string[];
+  quoteToken?: string | null;
   error?: string;
 }
 
@@ -22,7 +24,6 @@ export function BuildForm() {
   const [product, setProduct] = useState("");
   const [strengths, setStrengths] = useState("");
   const [competitors, setCompetitors] = useState("");
-  const [cap, setCap] = useState("1.00");
   const [quote, setQuote] = useState<QuoteAnswer | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,13 +32,12 @@ export function BuildForm() {
     product,
     strengths: strengths.split("\n").map((s) => s.trim()).filter(Boolean),
     competitors: competitors.split(/[\s,]+/).filter(Boolean),
-    maxSpendUsd: Number(cap),
   });
 
   async function getQuote() {
     setBusy(true);
     setMessage(null);
-    const res = await fetch("/api/quote", { method: "POST", body: JSON.stringify(payload()) });
+    const res = await adminFetch("/api/quote", { method: "POST", body: JSON.stringify(payload()) });
     const json = (await res.json()) as QuoteAnswer;
     setBusy(false);
     if (!res.ok) {
@@ -50,7 +50,7 @@ export function BuildForm() {
   async function build() {
     if (!quote) return;
     setBusy(true);
-    const res = await fetch("/api/build", { method: "POST", body: JSON.stringify({ ...payload(), confirmedMaxUsd: quote.totalMicros / 1e6 }) });
+    const res = await adminFetch("/api/build", { method: "POST", body: JSON.stringify({ ...payload(), confirmedMaxUsd: quote.totalMicros / 1e6, quoteToken: quote.quoteToken }) });
     const json = (await res.json()) as { error?: string; message?: string; cards?: number; chargedMicros?: number };
     setBusy(false);
     if (!res.ok) return setMessage(json.error ?? "Build failed.");
@@ -71,9 +71,6 @@ export function BuildForm() {
       <label className="block text-13">Where you win (one per line, optional, shown as your own words)
         <textarea className={field} rows={2} value={strengths} onChange={(e) => setStrengths(e.target.value)} />
       </label>
-      <label className="block text-13">Spend cap for this run, in dollars
-        <input className={`${field} num max-w-32`} value={cap} onChange={(e) => { setCap(e.target.value); setQuote(null); }} inputMode="decimal" />
-      </label>
       <button onClick={getQuote} disabled={busy} className="rounded-control border border-line bg-panel px-4 py-2 text-14 hover:bg-hover">Get a quote (free)</button>
       {message && <p role="status" className="text-14 text-medium">{message}</p>}
       {quote && (
@@ -82,8 +79,8 @@ export function BuildForm() {
           <ul className="mt-2 space-y-1 text-13 text-mute">
             {quote.lines.map((l) => <li key={l.endpointId} className="num">{l.calls} x {l.endpointId} at {usd(l.priceMicros)}</li>)}
           </ul>
-          <p className="mt-2 text-12 text-mute">{quote.priceSource === "catalog" ? "Live prices from the looot catalog." : "List prices dated 2026-10-10 (the catalog was not read)."}</p>
-          {quote.overCap && <p className="mt-2 text-medium">Over your cap of {usd(quote.capMicros)}. Calls that do not fit will be skipped and marked on the card.</p>}
+          <p className="mt-2 text-12 text-mute">Cap per build: {usd(quote.capMicros)}, set on the server. {quote.priceSource === "catalog" ? "Live prices from the looot catalog." : "List prices dated 2026-10-10 (the catalog was not read)."}</p>
+          {quote.overCap && <p className="mt-2 text-medium">Over the cap of {usd(quote.capMicros)} per build. Calls that do not fit will be skipped and marked on the card.</p>}
           <button onClick={build} disabled={busy} className="mt-3 rounded-control bg-brand px-4 py-2 text-14 text-brand-ink">Build for up to {usd(quote.totalMicros)}</button>
         </div>
       )}

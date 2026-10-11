@@ -13,3 +13,4 @@ coverage/
 cards/
 .demo.log
 battlecards.yaml
+.vitest/

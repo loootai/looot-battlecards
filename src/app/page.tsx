@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAdminPage } from "@/lib/auth/guard";
 import { usdPrecise } from "@/lib/money";
 import { loadCards } from "@/lib/store";
 import type { Card, SignalId } from "@/engine/types";
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 const first = (card: Card, signal: SignalId, n = 1) => card.sections.find((s) => s.signal === signal)?.claims.slice(0, n).map((c) => c.text) ?? [];
 
 export default async function Home() {
+  await requireAdminPage();
   const { product, cards } = await loadCards();
   if (cards.length === 0) {
     return (

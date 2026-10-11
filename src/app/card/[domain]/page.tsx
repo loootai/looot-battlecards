@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SectionView } from "@/components/Section";
+import { requireAdminPage } from "@/lib/auth/guard";
 import { usdPrecise } from "@/lib/money";
 import { loadCards } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
 export default async function CardPage({ params }: { params: Promise<{ domain: string }> }) {
+  await requireAdminPage();
   const { domain } = await params;
   const { product, cards } = await loadCards();
   const card = cards.find((c) => c.competitor.domain === domain);
