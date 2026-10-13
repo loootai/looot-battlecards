@@ -2,6 +2,10 @@
 
 Built from the GitHub release notes. Each version links to its release page.
 
+## Unreleased
+
+- Fix: the sign-in form could not be used in a browser. Chrome sends `Origin: null` for a same-origin form post under `Referrer-Policy: no-referrer`, and the same-origin check refused it with 403. The check now falls back to `Sec-Fetch-Site` for `null`.
+
 ## 0.1.5 (2026-10-11)
 
 Spend limits, version 2. Before this, a build was limited only by the cap per build, an in-memory rate limit and the token balance. Nothing limited spend across builds, two builds started together could both pass, a key with the day in it made a repeat on a new day pay again, and the cap in the engine was checked against a counter that each run kept for itself.

@@ -1,4 +1,6 @@
-<p align="center"><img src="assets/hero.png" alt="looot-battlecards" width="100%"></p>
+![looot-battlecards: six battlecards from a live run on 2026-10-13, looot against Clay, Apollo.io, ZoomInfo, Apify, Firecrawl and Exa, with the quote and the Build button](docs/media/banner.png)
+
+Logos and names belong to their owners. Public data from a live run on 2026-10-13. No affiliation.
 
 # looot-battlecards
 
@@ -9,6 +11,66 @@ Competitive battlecards from public data, with a source link and a fetch date ne
 An open-source alternative to Klue and Crayon. Neither publishes a starting price: on 2026-10-10 Klue's pricing page offered only "Get a demo" and Crayon's asked for an estimate request. Here a competitor costs about $0.015 in looot calls.
 
 > **Security notice.** Versions 0.1.3 and older had no admin sign-in. Anyone who could reach a deployed web UI could read the stored cards, download them, and start paid looot runs on your token. If you run v0.1.3 or older on a reachable host, upgrade to v0.1.4 and set `BATTLECARDS_ADMIN_PASSWORD`. See [Securing a deployment](#securing-a-deployment).
+
+
+<table>
+<tr>
+<td width="50%"><img src="docs/media/card-overview.png" alt="Six competitors on one screen: pricing, hiring, latest news and how many of 7 sections came back"></td>
+<td width="50%"><img src="docs/media/card-pricing.png" alt="Apify pricing and positioning lines, each with a source link, a date and the endpoint that read it"></td>
+</tr>
+<tr>
+<td><img src="docs/media/card-news.png" alt="ZoomInfo recent news with outlet and age, and 63 open roles counted by function"></td>
+<td><img src="docs/media/card-tech.png" alt="ZoomInfo tech stack by category and G2 review themes"></td>
+</tr>
+<tr>
+<td><img src="docs/media/card-gaps.png" alt="Missing sections say so: no job titles on two careers pages, no ads for Firecrawl, and the careersUrl setting that fixes it"></td>
+<td><img src="docs/media/card-quote.png" alt="The quote before the Build button: 48 calls, at most $0.09156"></td>
+</tr>
+</table>
+
+All six cards and the walkthrough are screenshots of the web UI running on the cards of a live paid run on 2026-10-13 (see [Live run](#live-run-looot-against-its-own-market)). They say "Live run · 2026-10-13". Ad text and any news title that names a person are replaced with a note in the images, nothing else is edited.
+
+![A 31-second walkthrough: the overview, two cards, the costs page and the quote](docs/media/demo.gif)
+
+The same walkthrough as MP4: [docs/media/demo.mp4](docs/media/demo.mp4).
+
+## Live run: looot against its own market
+
+`npm run cards` with looot as the product and six neighbours as competitors: Clay, Apollo.io, ZoomInfo, Apify, Firecrawl and Exa. All 7 signals each. Config:
+
+```yaml
+product: { name: looot, domain: looot.ai }
+competitors: [clay.com, apollo.io, zoominfo.com, apify.com, firecrawl.dev, exa.ai]
+maxSpendUsd: 0.25
+```
+
+Two runs on 2026-10-13, three competitors first, then all six (the first three were replayed from the stored results and not charged again).
+
+| | Result |
+|---|---|
+| Calls | 48 |
+| Charged by looot | $0.0902 ($0.04525 and $0.04496) |
+| Quote for all six | $0.09156 |
+| Sections filled | 39 of 42 |
+
+The calls were made while other jobs ran on the same looot balance, so `looot runs list` for that window shows more runs than these 48. The stored results match the quote line by line. 18 `jina-reader` and 6 `serper-news` runs in the list match this run exactly.
+
+What the run showed, good and bad:
+
+- Pricing, positioning, tech stack and reviews worked for all six. ZoomInfo's 63 open roles and G2 rating of 4.5 came back with sources.
+- News is only as good as the name. Searching `"Clay"` returned obituaries and a high school football score, `"Exa"` returned a subsea cable company and a French industrial group, `"Apollo"` returned an asset manager and the space programme. Firecrawl, ZoomInfo and Apify news was on topic. Set `name:` in the config to something more specific than the bare brand.
+- Ads have the same problem. The Meta library for "Clay" returned a hotel and parking offer in Dublin. ZoomInfo and Apify had LinkedIn ads only, Firecrawl had none.
+- Pricing lines are rough. Apollo's page gave "Compare plans: $1.2" and Exa's gave "Free: $10", which are not plan prices. Apify's list mixes plans with proxy and compute rates. Check the source link before you quote a number.
+- Hiring: Apollo.io and Exa returned no job titles from `/careers`, and the card says to set `careersUrl`. Clay's single "role" is a blog sentence about a product designer.
+
+Run it yourself:
+
+```bash
+npm run cards -- --config battlecards.yaml --dry-run          # 48 calls, list price $0.09156
+LOOOT_TOKEN=... npm run cards -- --config battlecards.yaml --max-spend 0.25
+```
+
+Demo data, the invented competitors of `npm run demo`:
 
 ![Overview](docs/screenshots/overview-light.png)
 
@@ -222,7 +284,7 @@ How to file an issue. Open an issue at https://github.com/loootai/looot-battleca
 
 ## Status
 
-No paid looot run was made. The code and fixtures follow the endpoint descriptions in the looot catalog and the shapes of the sibling repo [looot-monitor](https://github.com/loootai/looot-monitor). Parsing for `jina-reader` pages, `tomba-technology`, and the two ad libraries is built from the docs and hand-written fixtures, not from captured responses, so expect to adjust field names after your first real run. If a section comes back empty or wrong, open an issue with the raw response (see Troubleshooting). Pricing and careers extraction depends on the page being readable as markdown: pages that load prices with scripts come back empty, and the card says so. Review themes are keyword rules on search snippets, which is a weak signal, and the card quotes the snippet so you can judge it. All demo brands are invented.
+One paid looot run was made on 2026-10-13 (see Live run). Parsing for `jina-reader` pages, `tomba-technology` and the two ad libraries was written from the docs and hand-written fixtures, and the run showed it works on real pages but picks up noise: see the pricing and hiring notes above. If a section comes back empty or wrong, open an issue with the raw response (see Troubleshooting). Pricing and careers extraction depends on the page being readable as markdown: pages that load prices with scripts come back empty, and the card says so. Review themes are keyword rules on search snippets, which is a weak signal, and the card quotes the snippet so you can judge it. All demo brands are invented.
 
 
 ## Develop
